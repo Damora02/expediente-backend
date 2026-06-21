@@ -1,6 +1,6 @@
 const bcrypt = require('bcrypt');
 
-const contraseñaPlana = 'Admin2024!'; // <-- cambia esto por la contraseña que quieras
+const contraseñaPlana = 'Visor2024!'; 
 
 bcrypt.hash(contraseñaPlana, 10, (err, hash) => {
   if (err) {

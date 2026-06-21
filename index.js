@@ -4,12 +4,14 @@ require('dotenv').config();
 
 const pool = require('./config/db');
 const empleadosRoutes = require('./routes/empleados.routes');
+const authRoutes = require('./routes/auth.routes');
 
 const app = express();
 
 app.use(cors());
 app.use(express.json());
 app.use('/empleados', empleadosRoutes);
+app.use('/auth', authRoutes);
 
 // Ruta de prueba para confirmar que el servidor funciona
 app.get('/', (req, res) => {
