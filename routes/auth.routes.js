@@ -4,8 +4,18 @@ const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const pool = require('../config/db');
 
+const rateLimit = require('express-rate-limit');
+
+const limitadorLogin = rateLimit({
+  windowMs: 5 * 60 * 1000,
+  max: 5,
+  message: { error: 'Demasiados intentos fallidos. Intenta de nuevo en 5 minutos.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 // POST /auth/login -> iniciar sesion
-router.post('/login', async (req, res) => {
+router.post('/login', limitadorLogin, async (req, res) => {
   try {
     const { usuario, password } = req.body;
 
