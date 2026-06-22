@@ -1,9 +1,10 @@
 const express = require('express');
 const router = express.Router();
 const pool = require('../config/db');
+const { verificarToken, soloAdmin } = require('../middlewares/auth.middleware');
 
 // GET /empleados -> listar todos los empleados
-router.get('/', async (req, res) => {
+router.get('/', verificarToken, async (req, res) => {
   try {
     const [empleados] = await pool.promise().query(
       'SELECT * FROM empleados ORDER BY apellido, nombre'
@@ -16,7 +17,7 @@ router.get('/', async (req, res) => {
 });
 
 // GET /empleados/:id -> ver un empleado especifico
-router.get('/:id', async (req, res) => {
+router.get('/:id', verificarToken, async (req, res) => {
   try {
     const { id } = req.params;
     const [empleados] = await pool.promise().query(
@@ -34,7 +35,7 @@ router.get('/:id', async (req, res) => {
 });
 
 // POST /empleados -> crear un empleado nuevo
-router.post('/', async (req, res) => {
+router.post('/', verificarToken, soloAdmin, async (req, res) => {
   try {
     const {
       nombre, apellido, tipo_identificacion, numero_identificacion,
@@ -64,7 +65,7 @@ router.post('/', async (req, res) => {
 });
 
 // PUT /empleados/:id -> editar un empleado existente
-router.put('/:id', async (req, res) => {
+router.put('/:id', verificarToken, soloAdmin, async (req, res) => {
   try {
     const { id } = req.params;
     const {
@@ -95,7 +96,7 @@ router.put('/:id', async (req, res) => {
 });
 
 // DELETE /empleados/:id -> eliminar un empleado
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', verificarToken, soloAdmin, async (req, res) => {
   try {
     const { id } = req.params;
     const [resultado] = await pool.promise().query(
