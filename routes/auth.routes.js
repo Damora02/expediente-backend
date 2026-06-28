@@ -7,9 +7,9 @@ const pool = require('../config/db');
 const rateLimit = require('express-rate-limit');
 
 const limitadorLogin = rateLimit({
-  windowMs: 5 * 60 * 1000,
-  max: 5,
-  message: { error: 'Demasiados intentos fallidos. Intenta de nuevo en 5 minutos.' },
+  windowMs: 1 * 60 * 1000,
+  max: 4,
+  message: { error: 'Demasiados intentos fallidos. Intenta de nuevo en 1 minuto.' },
   standardHeaders: true,
   legacyHeaders: false,
 });
