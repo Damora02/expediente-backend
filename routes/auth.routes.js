@@ -4,6 +4,8 @@ const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const pool = require('../config/db');
 const { verificarToken, soloAdmin } = require('../middlewares/auth.middleware');
+const crypto = require('crypto');
+const { enviarCorreoRecuperacion } = require('../config/mailer');
 
 const rateLimit = require('express-rate-limit');
 
@@ -143,6 +145,84 @@ router.put('/cambiar-password', verificarToken, async (req, res) => {
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'Error al cambiar la contraseña' });
+  }
+});
+// POST /auth/olvide-password -> solicitar recuperacion de contraseña
+router.post('/olvide-password', async (req, res) => {
+  try {
+    const { correo } = req.body;
+
+    if (!correo) {
+      return res.status(400).json({ error: 'Debe indicar un correo' });
+    }
+
+    const [usuarios] = await pool.promise().query(
+      'SELECT * FROM usuarios WHERE correo = ?',
+      [correo]
+    );
+
+    // Por seguridad, siempre respondemos lo mismo, exista o no el correo
+    // (asi no revelamos que correos estan registrados en el sistema)
+    if (usuarios.length === 0) {
+      return res.json({ mensaje: 'Si el correo existe, se envio un enlace de recuperacion' });
+    }
+
+    const usuario = usuarios[0];
+    const token = crypto.randomBytes(32).toString('hex');
+    const expiraEn = new Date(Date.now() + 60 * 60 * 1000); // 1 hora
+
+    await pool.promise().query(
+      'INSERT INTO tokens_recuperacion (usuario_id, token, expira_en) VALUES (?, ?, ?)',
+      [usuario.id, token, expiraEn]
+    );
+
+    await enviarCorreoRecuperacion(usuario.correo, token);
+
+    res.json({ mensaje: 'Si el correo existe, se envio un enlace de recuperacion' });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Error al procesar la solicitud' });
+  }
+});
+
+// POST /auth/restablecer-password -> usar el token para definir una nueva contraseña
+router.post('/restablecer-password', async (req, res) => {
+  try {
+    const { token, passwordNueva } = req.body;
+
+    if (!token || !passwordNueva) {
+      return res.status(400).json({ error: 'Token y nueva contraseña son obligatorios' });
+    }
+    if (passwordNueva.length < 6) {
+      return res.status(400).json({ error: 'La contraseña debe tener al menos 6 caracteres' });
+    }
+
+    const [tokens] = await pool.promise().query(
+      'SELECT * FROM tokens_recuperacion WHERE token = ? AND usado = FALSE AND expira_en > NOW()',
+      [token]
+    );
+
+    if (tokens.length === 0) {
+      return res.status(400).json({ error: 'El enlace es invalido o ya expiro' });
+    }
+
+    const tokenInfo = tokens[0];
+    const nuevoHash = await bcrypt.hash(passwordNueva, 10);
+
+    await pool.promise().query(
+      'UPDATE usuarios SET password_hash = ?, debe_cambiar_password = FALSE WHERE id = ?',
+      [nuevoHash, tokenInfo.usuario_id]
+    );
+
+    await pool.promise().query(
+      'UPDATE tokens_recuperacion SET usado = TRUE WHERE id = ?',
+      [tokenInfo.id]
+    );
+
+    res.json({ mensaje: 'Contraseña restablecida correctamente' });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Error al restablecer la contraseña' });
   }
 });
 
