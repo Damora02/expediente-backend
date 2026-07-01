@@ -176,9 +176,14 @@ router.post('/olvide-password', async (req, res) => {
       [usuario.id, token, expiraEn]
     );
 
-    await enviarCorreoRecuperacion(usuario.correo, token);
+    try {
+  await enviarCorreoRecuperacion(usuario.correo, token);
+  console.log('CORREO ENVIADO CORRECTAMENTE a:', usuario.correo);
+} catch (errorCorreo) {
+  console.error('ERROR AL ENVIAR CORREO:', errorCorreo);
+}
 
-    res.json({ mensaje: 'Si el correo existe, se envio un enlace de recuperacion' });
+res.json({ mensaje: 'Si el correo existe, se envio un enlace de recuperacion' });
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'Error al procesar la solicitud' });
