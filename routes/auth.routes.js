@@ -230,5 +230,74 @@ router.post('/restablecer-password', async (req, res) => {
     res.status(500).json({ error: 'Error al restablecer la contraseña' });
   }
 });
+// GET /auth/usuarios -> listar todos los usuarios (solo admin)
+router.get('/usuarios', verificarToken, soloAdmin, async (req, res) => {
+  try {
+    const [usuarios] = await pool.promise().query(
+      'SELECT id, usuario, correo, rol, activo, creado_en FROM usuarios ORDER BY creado_en DESC'
+    );
+    res.json(usuarios);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Error al obtener usuarios' });
+  }
+});
+
+// PUT /auth/usuarios/:id/rol -> cambiar el rol de un usuario (solo admin)
+router.put('/usuarios/:id/rol', verificarToken, soloAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { rol } = req.body;
+
+    if (!['admin', 'visor'].includes(rol)) {
+      return res.status(400).json({ error: 'Rol invalido' });
+    }
+
+    // No permitir que el admin se cambie su propio rol
+    if (parseInt(id) === req.usuario.id) {
+      return res.status(400).json({ error: 'No puedes cambiar tu propio rol' });
+    }
+
+    const [resultado] = await pool.promise().query(
+      'UPDATE usuarios SET rol = ? WHERE id = ?',
+      [rol, id]
+    );
+
+    if (resultado.affectedRows === 0) {
+      return res.status(404).json({ error: 'Usuario no encontrado' });
+    }
+
+    res.json({ mensaje: 'Rol actualizado correctamente' });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Error al actualizar el rol' });
+  }
+});
+
+// DELETE /auth/usuarios/:id -> eliminar un usuario permanentemente (solo admin)
+router.delete('/usuarios/:id', verificarToken, soloAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // No permitir que el admin se elimine a si mismo
+    if (parseInt(id) === req.usuario.id) {
+      return res.status(400).json({ error: 'No puedes eliminar tu propia cuenta' });
+    }
+
+    const [resultado] = await pool.promise().query(
+      'DELETE FROM usuarios WHERE id = ?',
+      [id]
+    );
+
+    if (resultado.affectedRows === 0) {
+      return res.status(404).json({ error: 'Usuario no encontrado' });
+    }
+
+    res.json({ mensaje: 'Usuario eliminado correctamente' });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Error al eliminar el usuario' });
+  }
+});
 
 module.exports = router;
