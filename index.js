@@ -3,6 +3,8 @@ const cors = require('cors');
 require('dotenv').config();
 
 const pool = require('./config/db');
+require('./jobs/alertaVacaciones'); //
+const { revisarAniversarios } = require('./jobs/alertaVacaciones'); 
 const empleadosRoutes = require('./routes/empleados.routes');
 const authRoutes = require('./routes/auth.routes');
 const documentosRoutes = require('./routes/documentos.routes');
@@ -20,6 +22,15 @@ app.get('/', (req, res) => {
   res.json({ mensaje: 'Backend funcionando correctamente' });
 });
 
+app.get('/test-aniversarios', async (req, res) => {
+  try {
+    await revisarAniversarios();
+    res.json({ mensaje: 'Revision ejecutada. Revisa la consola y el correo de los admins.' });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Error al revisar aniversarios' });
+  }
+});
 // Ruta de prueba para confirmar la conexion a MySQL
 app.get('/test-db', async (req, res) => {
   try {

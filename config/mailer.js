@@ -12,6 +12,7 @@ const transporter = nodemailer.createTransport({
 const enviarCorreoRecuperacion = async (correoDestino, token) => {
   const enlace = `http://localhost:3000/restablecer-password?token=${token}`;
 
+
   await transporter.sendMail({
     from: `"Deco Pastel Costa Rica" <${process.env.EMAIL_USER}>`,
     to: correoDestino,
@@ -33,5 +34,20 @@ const enviarCorreoRecuperacion = async (correoDestino, token) => {
     `,
   });
 };
+const enviarCorreoAniversario = async (destinatarios, nombreEmpleado, aniosCumplidos, fechaIngreso) => {
+  await transporter.sendMail({
+    from: `"Deco Pastel Costa Rica" <${process.env.EMAIL_USER}>`,
+    to: destinatarios,
+    subject: `Aniversario laboral: ${nombreEmpleado}`,
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 480px; margin: 0 auto;">
+        <h2 style="color: #FF33CC;">Aniversario laboral</h2>
+        <p><strong>${nombreEmpleado}</strong> cumplió hoy <strong>${aniosCumplidos} año(s)</strong> de trabajo.</p>
+        <p>Fecha de ingreso: ${fechaIngreso}</p>
+        <p>Le corresponden 15 días de vacaciones adicionales.</p>
+      </div>
+    `,
+  });
+};
 
-module.exports = { enviarCorreoRecuperacion };
+module.exports = { enviarCorreoRecuperacion, enviarCorreoAniversario };
