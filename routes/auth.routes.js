@@ -95,7 +95,7 @@ router.post('/registro', verificarToken, soloAdmin, async (req, res) => {
 
     res.status(201).json({
       id: resultado.insertId,
-      mensaje: 'Usuario creado correctamente. Debera cambiar su contraseña al iniciar sesion.',
+      mensaje: 'Usuario creado correctamente. Debe cambiar su contraseña al iniciar sesion.',
     });
   } catch (error) {
     console.error(error);
