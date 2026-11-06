@@ -88,7 +88,10 @@ router.put('/:id', verificarToken, soloAdmin, async (req, res) => {
     if (resultado.affectedRows === 0) {
       return res.status(404).json({ error: 'Empleado no encontrado' });
     }
-    res.json({ mensaje: 'Empleado actualizado correctamente' });
+    res.json({
+  id: Number(id),
+  mensaje: 'Empleado actualizado correctamente'
+});
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'Error al actualizar el empleado' });

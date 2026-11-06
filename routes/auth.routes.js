@@ -95,7 +95,7 @@ router.post('/registro', verificarToken, soloAdmin, async (req, res) => {
 
     res.status(201).json({
       id: resultado.insertId,
-      mensaje: 'Usuario creado correctamente. Debe cambiar su contraseña al iniciar sesion.',
+      mensaje: 'Usuario creado correctamente. Debera cambiar su contraseña al iniciar sesion.',
     });
   } catch (error) {
     console.error(error);
@@ -171,14 +171,19 @@ router.post('/olvide-password', async (req, res) => {
     const token = crypto.randomBytes(32).toString('hex');
     const expiraEn = new Date(Date.now() + 60 * 60 * 1000); // 1 hora
 
-    await pool.promise().query(
-      'INSERT INTO tokens_recuperacion (usuario_id, token, expira_en) VALUES (?, ?, ?)',
-      [usuario.id, token, expiraEn]
-    );
+    const tokenHash = crypto
+  .createHash('sha256')
+  .update(token)
+  .digest('hex');
+
+await pool.promise().query(
+  'INSERT INTO tokens_recuperacion (usuario_id, token, expira_en) VALUES (?, ?, ?)',
+  [usuario.id, tokenHash, expiraEn]
+);
 
     try {
   await enviarCorreoRecuperacion(usuario.correo, token);
-  console.log('CORREO ENVIADO CORRECTAMENTE a:', usuario.correo);
+  console.log('Correo de recuperación enviado correctamente');
 } catch (errorCorreo) {
   console.error('ERROR AL ENVIAR CORREO:', errorCorreo);
 }
@@ -191,45 +196,128 @@ res.json({ mensaje: 'Si el correo existe, se envio un enlace de recuperacion' })
 });
 
 // POST /auth/restablecer-password -> usar el token para definir una nueva contraseña
+  
 router.post('/restablecer-password', async (req, res) => {
+  const { token, passwordNueva } = req.body || {};
+
+  if (
+    typeof token !== 'string' ||
+    typeof passwordNueva !== 'string' ||
+    !token ||
+    !passwordNueva
+  ) {
+    return res.status(400).json({
+      error: 'Token y nueva contraseña son obligatorios'
+    });
+  }
+
+  if (passwordNueva.length < 6) {
+    return res.status(400).json({
+      error: 'La contraseña debe tener al menos 6 caracteres'
+    });
+  }
+
+  let conexion;
+
   try {
-    const { token, passwordNueva } = req.body;
+    // Generar el hash SHA-256 del token recibido.
+    const tokenHash = crypto
+      .createHash('sha256')
+      .update(token)
+      .digest('hex');
 
-    if (!token || !passwordNueva) {
-      return res.status(400).json({ error: 'Token y nueva contraseña son obligatorios' });
-    }
-    if (passwordNueva.length < 6) {
-      return res.status(400).json({ error: 'La contraseña debe tener al menos 6 caracteres' });
-    }
+    // Obtener conexión para la transacción.
+    conexion = await pool.promise().getConnection();
 
-    const [tokens] = await pool.promise().query(
-      'SELECT * FROM tokens_recuperacion WHERE token = ? AND usado = FALSE AND expira_en > NOW()',
-      [token]
+    await conexion.beginTransaction();
+
+    // Buscar y bloquear el token.
+    const [tokens] = await conexion.query(
+      `SELECT id, usuario_id
+       FROM tokens_recuperacion
+       WHERE token = ?
+       AND usado = FALSE
+       AND expira_en > NOW()
+       LIMIT 1
+       FOR UPDATE`,
+      [tokenHash]
     );
 
     if (tokens.length === 0) {
-      return res.status(400).json({ error: 'El enlace es invalido o ya expiro' });
+      await conexion.rollback();
+
+      return res.status(400).json({
+        error: 'El enlace es invalido o ya expiro'
+      });
     }
 
     const tokenInfo = tokens[0];
+
+    // Generar el hash de la nueva contraseña.
     const nuevoHash = await bcrypt.hash(passwordNueva, 10);
 
-    await pool.promise().query(
-      'UPDATE usuarios SET password_hash = ?, debe_cambiar_password = FALSE WHERE id = ?',
+    // Actualizar la contraseña del usuario.
+    const [resultadoUsuario] = await conexion.query(
+      `UPDATE usuarios
+       SET password_hash = ?, debe_cambiar_password = FALSE
+       WHERE id = ?`,
       [nuevoHash, tokenInfo.usuario_id]
     );
 
-    await pool.promise().query(
-      'UPDATE tokens_recuperacion SET usado = TRUE WHERE id = ?',
+    if (resultadoUsuario.affectedRows !== 1) {
+      await conexion.rollback();
+
+      return res.status(400).json({
+        error: 'No se pudo actualizar la contraseña'
+      });
+    }
+
+    // Marcar el token como utilizado.
+    const [resultadoToken] = await conexion.query(
+      `UPDATE tokens_recuperacion
+       SET usado = TRUE
+       WHERE id = ? AND usado = FALSE`,
       [tokenInfo.id]
     );
 
-    res.json({ mensaje: 'Contraseña restablecida correctamente' });
+    if (resultadoToken.affectedRows !== 1) {
+      await conexion.rollback();
+
+      return res.status(400).json({
+        error: 'El enlace ya fue utilizado'
+      });
+    }
+
+    // Confirmar ambas operaciones.
+    await conexion.commit();
+
+    return res.json({
+      mensaje: 'Contraseña restablecida correctamente'
+    });
+
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: 'Error al restablecer la contraseña' });
+    if (conexion) {
+      try {
+        await conexion.rollback();
+      } catch (errorRollback) {
+        console.error('Error al revertir la transaccion');
+      }
+    }
+
+    console.error('Error al restablecer contraseña:', error.message);
+
+    return res.status(500).json({
+      error: 'Error al restablecer la contraseña'
+    });
+
+  } finally {
+    if (conexion) {
+      conexion.release();
+    }
   }
 });
+
+
 // GET /auth/usuarios -> listar todos los usuarios (solo admin)
 router.get('/usuarios', verificarToken, soloAdmin, async (req, res) => {
   try {
